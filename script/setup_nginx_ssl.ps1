@@ -1,6 +1,16 @@
 # Setup Proxy Server with Nginx for Windows.
 Param (
-    # Challenge Certificate(default:false for test)
+    # Parent Path to install nginx: "C:\tools" as default
+    [string] $NginxRootPath      = "C:\tools",
+    # Common Name for Certificate: ex. "www.example.com"
+    [string] $CommonName         = "",
+    # AlternativeNames, comma delimited: ex. "proxy.example.com,app.example.com"
+    [string] $AlternativeNames   = "",
+    # Email for registration on letsencrypt ex. "you@example.com"
+    [string] $Email              = "",
+    # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
+    [string] $CertStorePath      = "C:\SSL\cert\win-acme",
+    # Challenge Certificate: default is false. It's just for testing
     [switch]$Cert,
     # win-acme v1 Will be discontinued
     [switch]$WinAcme1,
@@ -8,30 +18,38 @@ Param (
     [switch]$WinAcme2
 )
 
-# Configurations
-$NginxRootPath = "C:\nginx"
-$CommonName = "ws-k1t.westus2.cloudapp.azure.com"
-$AlternativeNames = "proxy.miles.server-on.net,hyperv.miles.server-on.net"
-# $AlternativeNames = ""
-$Email = "k1tajima@mi.to"
-$CertStorePath = "C:\SSL\cert\win-acme2"
+# Check Parameters
+if ( $WinAcme2 -eq $WinAcme1 ) {
+    # win-acme v2 as default
+    $WinAcme2 = $true
+    $WinAcme1 = $false
+}
 
 # Please check the latest version of win-acme yourself.
 # https://github.com/PKISharp/win-acme/releases/
 $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.4.227/win-acme.v2.0.4.227.zip"
-
-if ( $WinAcme2 -eq $WinAcme1 ) {
-    $WinAcme2 = $true
-    $WinAcme1 = $false
-}
 
 # Main
 function main {
     Write-Host "HostName: $env:COMPUTERNAME"
     Write-Host "CommonName: $CommonName"
 
+    # Prerequisite for .NET Framework
+    $HasInstalledDotNet472 = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Release | Foreach-Object { $_ -ge 461814 }
+
     # Install packages first.
     InstallAll -NginxRootPath $NginxRootPath
+
+    if (! $HasInstalledDotNet472) {
+        # Need to reboot Windows.
+        Write-Host "------------------------------------------"
+        Write-Host ".NET Framework 4.7.2 has installed."
+        Write-Host "YOU HAVE TO REBOOT WINDOWS TO ACTIVATE IT."
+        Write-Host "Then please run this script again."
+        Write-Host "------------------------------------------"
+        Restart-Computer -Confirm
+        exit
+    }
 
     # Get Nginx Path Set(NginxDir, ConfPath, BinPath)
     $NginxPathSet = Get-NginxPaths -installDir $NginxRootPath
@@ -43,7 +61,7 @@ function main {
     MakeCertStoreFolder -Path $CertStorePath
 
     # Make dhparam.pem by openssl.
-    MakeDhparam -StorePath $CertStorePath
+    MakeDhparam -Path $CertStorePath
 
     # Drive letsencrypt-win-simple by webroot mode.
     LetsencryptCertificate `
@@ -103,9 +121,6 @@ function InstallAll {
         choco install -y letsencrypt-win-simple
     }
 
-    # Apply environment for packages installed by chocolatey.
-    refreshenv
-
     # win-acme v2: Install from release package.
     # https://github.com/PKISharp/win-acme/releases
     $WinAcmeInstallPath = Join-Path $env:ProgramFiles "win-acme2"
@@ -118,6 +133,12 @@ function InstallAll {
         [System.Environment]::SetEnvironmentVariable("Path", $SystemPath, "Machine")
         $env:Path   = "${SystemPath};${UserPath}"
     }
+
+    # Install .Net Framework 4.7.2.
+    choco install -y dotnet4.7.2
+
+    # Apply environment for packages installed by chocolatey.
+    refreshenv
 }
 
 function SetupFirewall {
@@ -459,16 +480,16 @@ function MakeCertStoreFolder {
 function MakeDhparam {
     param(
         # Store Folder for dhparam.
-        [Parameter(Mandatory=$true)][string] $StorePath
+        [Parameter(Mandatory=$true)][string] $Path
     )
 
-    if ( ! (Test-Path $StorePath)) {
+    if ( ! (Test-Path $Path)) {
         return
     }
     
     # Generate DH parameters for DHE ciphers.
     # https://qiita.com/d2cd-ytakada/items/7ac9ce32c1ed4d01d505
-    $dhparam = Join-Path $StorePath dhparam.pem
+    $dhparam = Join-Path $Path dhparam.pem
     if ( ! (Test-Path $dhparam) ) {
         openssl dhparam -out $dhparam 2048
     } else {
