@@ -34,8 +34,10 @@ function main {
     Write-Host "HostName: $env:COMPUTERNAME"
     Write-Host "CommonName: $CommonName"
 
-    # Prerequisite for .NET Framework
-    $HasInstalledDotNet472 = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Release | Foreach-Object { $_ -ge 461814 }
+    # Check Installed .NET Framework Version.
+    # https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#ps_a
+    $DotNetKey = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full\' | Get-ItemPropertyValue -Name Release | Sort-Object -Descending | Select-Object -First 1
+    $HasInstalledDotNet472 = ($DotNetKey -ge 461814)
 
     # Install packages first.
     InstallAll -NginxRootPath $NginxRootPath
