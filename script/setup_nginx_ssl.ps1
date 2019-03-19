@@ -1,15 +1,17 @@
 # Setup Proxy Server with Nginx for Windows.
 Param (
-    # Parent Path to install nginx: "C:\tools" as default
-    [string] $NginxRootPath      = "C:\tools",
     # Common Name for Certificate: ex. "www.example.com"
-    [string] $CommonName         = "",
+    [Paramter(Position=0,Mandatory=$true)]
+    [string] $CommonName        = "",
     # AlternativeNames, comma delimited: ex. "proxy.example.com,app.example.com"
-    [string] $AlternativeNames   = "",
+    [string] $AlternativeNames  = "",
     # Email for registration on letsencrypt ex. "you@example.com"
-    [string] $Email              = "",
+    [Paramter(Position=1,Mandatory=$true)]
+    [string] $Email             = "",
+    # Parent Path to install nginx: "C:\tools" as default
+    [string] $NginxRootPath     = "C:\tools",
     # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
-    [string] $CertStorePath      = "C:\SSL\cert\win-acme",
+    [string] $CertStorePath     = "C:\SSL\cert\win-acme",
     # Challenge Certificate: default is false. It's just for testing
     [switch]$Cert,
     # win-acme v1 Will be discontinued
