@@ -1,12 +1,12 @@
 # Setup Proxy Server with Nginx for Windows.
 Param (
     # Common Name for Certificate: ex. "www.example.com"
-    [Paramter(Position=0,Mandatory=$true)]
+    [Parameter(Position=0,Mandatory=$true)]
     [string] $CommonName        = "",
     # AlternativeNames, comma delimited: ex. "proxy.example.com,app.example.com"
     [string] $AlternativeNames  = "",
     # Email for registration on letsencrypt ex. "you@example.com"
-    [Paramter(Position=1,Mandatory=$true)]
+    [Parameter(Position=1,Mandatory=$true)]
     [string] $Email             = "",
     # Parent Path to install nginx: "C:\tools" as default
     [string] $NginxRootPath     = "C:\tools",
@@ -160,7 +160,7 @@ function SetupFirewall {
     # The ACME server will always send requests to port 80.
     # https://github.com/PKISharp/win-acme/wiki/Command-line#selfhosting-plugin
     # Note: Windows Firewall can't determine the program listening port 80 for selfhosting.
-    AllowFirewallRule -Name "Letsencrypt ACME" -Port 80
+    # AllowFirewallRule -Name "Letsencrypt ACME" -Port 80
 }
 
 # https://github.com/mkevenaar/chocolatey-packages/blob/master/automatic/nginx/tools/helpers.ps1
@@ -211,10 +211,13 @@ function LetsencryptCertificate {
         if ( $WinAcme2 ) {
             $OptionParams = "--installation", "script",
                             "--store", "pemfiles", `
-                            "--pemfilespath", $CertStorePath
+                            "--pemfilespath", $CertStorePath, `
+                            "--script", $Script, `
+                            "--scriptparameters", "'{0}' '${CertStorePath}'"
+        } else {
+            $OptionParams = "--script", $Script,
+                            "--scriptparameters", "\`"{0}\`" \`"${CertStorePath}\`" \`"{2}\`" \`"{StorePath}\`""
         }
-        $OptionParams += "--script", $Script,
-                         "--scriptparameters", "`"{0} \`"${CertStorePath}\`" \`"{2}\`" \`"{StorePath}\`"`""
     } else {
 
         Write-Host "Test Lets Encrypt Certificate..."
@@ -241,7 +244,7 @@ function LetsencryptCertificate {
         # win-acme v2
 
         Write-Host "wacs --target manual `
-            --validation selfhosting `
+            --validation filesystem `
             --commonname ${CommonName} `
             --host ${HostNames} `
             --webroot $WebRootPath `
@@ -249,7 +252,7 @@ function LetsencryptCertificate {
             --accepttos `
             ${OptionParams}"
         wacs --target manual `
-            --validation selfhosting `
+            --validation filesystem `
             --commonname ${CommonName} `
             --host ${HostNames} `
             --webroot $WebRootPath `
@@ -261,7 +264,7 @@ function LetsencryptCertificate {
         # letsencrypt-win-win-simple v1
 
         Write-Host "letsencrypt --plugin manual `
-        --validation selfhosting `
+        --validation filesystem `
         --commonname ${CommonName} `
         --manualhost ${HostNames} `
         --webroot $WebRootPath `
@@ -270,7 +273,7 @@ function LetsencryptCertificate {
         ${OptionParams}"
     
         letsencrypt --plugin manual `
-            --validation selfhosting `
+            --validation filesystem `
             --commonname ${CommonName} `
             --manualhost ${HostNames} `
             --webroot $WebRootPath `
