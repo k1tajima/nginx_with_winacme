@@ -45,7 +45,7 @@ function main {
     InstallAll -NginxRootPath $NginxRootPath
 
     if (! $HasInstalledDotNet472) {
-        # Need to reboot Windows.
+        # Reboot Windows after installing .NET Framework.
         Write-Host "------------------------------------------"
         Write-Host ".NET Framework 4.7.2 has installed."
         Write-Host "YOU HAVE TO REBOOT WINDOWS TO ACTIVATE IT."
@@ -67,12 +67,12 @@ function main {
     # Make dhparam.pem by openssl.
     MakeDhparam -Path $CertStorePath
 
-    # Drive letsencrypt-win-simple by webroot mode.
+    # Drive Windows ACME Simple(WACS) by webroot mode.
     LetsencryptCertificate `
         -CommonName $CommonName `
         -AlternativeNames $AlternativeNames `
         -Email $Email `
-        -WebRootPath (Join-Path $NginxPathSet.NginxDir "html") `
+        -WebRootPath $(Join-Path $NginxPathSet.NginxDir "html") `
         -CertStorePath $(if ( $Cert ) { $CertStorePath } else { "" }) `
         -WinAcme2:$WinAcme2
 
@@ -88,7 +88,8 @@ function main {
 function InstallAll {
     Param (
         # Nginx Location
-        [Parameter(Mandatory=$true)][string] $NginxRootPath,
+        [Parameter(Mandatory=$true)]
+        [string] $NginxRootPath,
         # Nginx Listen Port
         [string] $NginxPort
     )
@@ -148,7 +149,8 @@ function InstallAll {
 function SetupFirewall {
     Param (
         # Full-path of nginx.exe
-        [Parameter(Mandatory=$true)][string] $Nginx
+        [Parameter(Mandatory=$true)]
+        [string] $Nginx
     )
 
     # Firewall setting for nginx.
@@ -167,7 +169,7 @@ function SetupFirewall {
 function Get-NginxPaths {
     [CmdletBinding()]
     param(
-        [Parameter(Position = 0, Mandatory)][ValidateNotNullOrEmpty()][string] $installDir
+        [Parameter(Position=0, Mandatory)][ValidateNotNullOrEmpty()][string] $installDir
     )
 
     $nginxDir = Get-ChildItem $installDir -Directory -Filter 'nginx*' | Sort-Object { -join $_.Name.Replace('-','.').Split('.').PadLeft(3) } -Descending | Select-Object -First 1 -ExpandProperty FullName
@@ -179,10 +181,13 @@ function Get-NginxPaths {
 
 function LetsencryptCertificate {
     Param (
-        [Parameter(Mandatory=$true)][string] $CommonName,
+        [Parameter(Mandatory=$true)]
+        [string] $CommonName,
         [string] $AlternativeNames,
-        [Parameter(Mandatory=$true)][string] $Email,
-        [Parameter(Mandatory=$true)][string] $WebRootPath,
+        [Parameter(Mandatory=$true)]
+        [string] $Email,
+        [Parameter(Mandatory=$true)]
+        [string] $WebRootPath,
         [string] $CertStorePath,
         [switch] $WinAcme2
     )
@@ -285,8 +290,10 @@ function LetsencryptCertificate {
 
 function UpgradeNginxConf {
     param (
-        [Parameter(Mandatory=$true)][string] $ConfPath,
-        [Parameter(Mandatory=$true)][string] $ServerName,
+        [Parameter(Mandatory=$true)]
+        [string] $ConfPath,
+        [Parameter(Mandatory=$true)]
+        [string] $ServerName,
         [string] $Source
     )
 
@@ -337,8 +344,10 @@ function UpgradeNginxConf {
 
 function ExtractZipUrl {
     Param (
-        [Parameter(Mandatory=$true)][string] $Url,
-        [Parameter(Mandatory=$true)][string] $Destination,
+        [Parameter(Mandatory=$true)]
+        [string] $Url,
+        [Parameter(Mandatory=$true)]
+        [string] $Destination,
         [switch] $Clean
     )
 
@@ -367,7 +376,8 @@ function ExtractZipUrl {
 
 function AllowFirewallRule {
     Param (
-        [Parameter(Mandatory=$true)][string] $Name,
+        [Parameter(Mandatory=$true)]
+        [string] $Name,
         [string] $Enabled="True",
         [string] $Port,
         [string] $Program
@@ -453,7 +463,8 @@ function AllowFirewallRule {
 function MakeCertStoreFolder {
     Param (
         # Cert Store Path
-        [Parameter(Mandatory=$true)][string] $Path
+        [Parameter(Mandatory=$true)]
+        [string] $Path
     )
 
     if ( Test-Path $Path ) {
@@ -487,7 +498,8 @@ function MakeCertStoreFolder {
 function MakeDhparam {
     param(
         # Store Folder for dhparam.
-        [Parameter(Mandatory=$true)][string] $Path
+        [Parameter(Mandatory=$true)]
+        [string] $Path
     )
 
     if ( ! (Test-Path $Path)) {
