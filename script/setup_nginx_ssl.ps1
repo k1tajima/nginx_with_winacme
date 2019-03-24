@@ -27,11 +27,14 @@ if ( $WinAcme2 -eq $WinAcme1 ) {
     $WinAcme1 = $false
 }
 
+# Web Access with TLS1.2
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
 # Please check the latest version of win-acme yourself.
 # https://github.com/PKISharp/win-acme/releases/
 $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.4.227/win-acme.v2.0.4.227.zip"
+# $WinAcmeUrl = (((Invoke-WebRequest -Uri "https://github.com/PKISharp/win-acme/releases/").Links.Href) -match "win-acme.v[0-9\.]+.zip")[0]
 
-# Main
 function main {
     Write-Host "HostName: $env:COMPUTERNAME"
     Write-Host "CommonName: $CommonName"
@@ -58,8 +61,11 @@ function main {
     # Get Nginx Path Set(NginxDir, ConfPath, BinPath)
     $NginxPathSet = Get-NginxPaths -installDir $NginxRootPath
 
-    # Setup Firewall.
-    SetupFirewall -Nginx $NginxPathSet.BinPath
+    # Setup firewall for nginx.
+    AllowFirewallRule -Name "nginx" -Program $NginxPathSet.BinPath
+
+    # Setup firewall for win-acme selfhosting mode.
+    # AllowFirewallRule -Name "Letsencrypt ACME" -Port 80
 
     # Make cert store folder secure.
     MakeCertStoreFolder -Path $CertStorePath
@@ -76,7 +82,7 @@ function main {
         -CertStorePath $(if ( $Cert ) { $CertStorePath } else { "" }) `
         -WinAcme2:$WinAcme2
 
-    # Upgrade nginx.conf for ssl.
+    # Upgrade nginx.conf for SSL.
     if ( $Cert ) {
         UpgradeNginxConf -ConfPath $NginxPathSet.ConfPath -ServerName $CommonName -Source (Join-Path $PSScriptRoot conf)
 
@@ -144,39 +150,6 @@ function InstallAll {
 
     # Apply environment for packages installed by chocolatey.
     refreshenv
-}
-
-function SetupFirewall {
-    Param (
-        # Full-path of nginx.exe
-        [Parameter(Mandatory=$true)]
-        [string] $Nginx
-    )
-
-    # Firewall setting for nginx.
-    if ( Test-Path $Nginx ) {
-        AllowFirewallRule -Name "nginx" -Program $Nginx
-    }
-
-    # Firewall setting for win-acme.
-    # The ACME server will always send requests to port 80.
-    # https://github.com/PKISharp/win-acme/wiki/Command-line#selfhosting-plugin
-    # Note: Windows Firewall can't determine the program listening port 80 for selfhosting.
-    # AllowFirewallRule -Name "Letsencrypt ACME" -Port 80
-}
-
-# https://github.com/mkevenaar/chocolatey-packages/blob/master/automatic/nginx/tools/helpers.ps1
-function Get-NginxPaths {
-    [CmdletBinding()]
-    param(
-        [Parameter(Position=0, Mandatory)][ValidateNotNullOrEmpty()][string] $installDir
-    )
-
-    $nginxDir = Get-ChildItem $installDir -Directory -Filter 'nginx*' | Sort-Object { -join $_.Name.Replace('-','.').Split('.').PadLeft(3) } -Descending | Select-Object -First 1 -ExpandProperty FullName
-    $confPath = Join-Path $nginxDir 'conf\nginx.conf'
-    $binPath = Join-Path $nginxDir 'nginx.exe'
-
-    return @{ NginxDir = $nginxDir; ConfPath = $confPath; BinPath = $binPath }
 }
 
 function LetsencryptCertificate {
@@ -342,6 +315,20 @@ function UpgradeNginxConf {
     }
 }
 
+# https://github.com/mkevenaar/chocolatey-packages/blob/master/automatic/nginx/tools/helpers.ps1
+function Get-NginxPaths {
+    [CmdletBinding()]
+    param(
+        [Parameter(Position=0, Mandatory)][ValidateNotNullOrEmpty()][string] $installDir
+    )
+
+    $nginxDir = Get-ChildItem $installDir -Directory -Filter 'nginx*' | Sort-Object { -join $_.Name.Replace('-','.').Split('.').PadLeft(3) } -Descending | Select-Object -First 1 -ExpandProperty FullName
+    $confPath = Join-Path $nginxDir 'conf\nginx.conf'
+    $binPath = Join-Path $nginxDir 'nginx.exe'
+
+    return @{ NginxDir = $nginxDir; ConfPath = $confPath; BinPath = $binPath }
+}
+
 function ExtractZipUrl {
     Param (
         [Parameter(Mandatory=$true)]
@@ -366,8 +353,7 @@ function ExtractZipUrl {
         Remove-Item -Path $Destination\* -Recurse -Force -ErrorAction Ignore
     }
 
-    # Download zip from url with TLS1.2.
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12,[Net.SecurityProtocolType]::Tls11
+    # Download zip from url
     (New-Object System.Net.WebClient).DownloadFile($Url, $TempZip)
     
     # Extract by 7z.
@@ -383,10 +369,10 @@ function AllowFirewallRule {
         [string] $Program
     )
 
-    Write-Host  "Allow firewall for $Name. `
-        Enabled = $Enabled `
-        Port    = $Port `
-        Program = $Program"
+    # Write-Host  "Allow firewall for $Name. `
+    #     Enabled = $Enabled `
+    #     Port    = $Port `
+    #     Program = $Program"
 
     # Activate the firewall rule if exist.
     # See https://docs.microsoft.com/en-us/powershell/module/netsecurity/Set-NetFirewallRule?view=win10-ps
@@ -468,8 +454,10 @@ function MakeCertStoreFolder {
     )
 
     if ( Test-Path $Path ) {
-        Write-Host "There is certificate store folder."
+        Write-Host "----------------------------------------------------"
+        Write-Host "There is certificate store folder, $Path"
         Write-Host "TAKE CARE IT SECURE. THE PRIVATE-KEY WILL BE STORED."
+        Write-Host "----------------------------------------------------"
         return
     }
 
