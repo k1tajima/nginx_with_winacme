@@ -2,12 +2,12 @@
 Param (
     # Common Name for Certificate: ex. "www.example.com"
     [Parameter(Position=0,Mandatory=$true)]
-    [string] $CommonName        = "",
+    [string] $CommonName,
     # AlternativeNames, comma delimited: ex. "proxy.example.com,app.example.com"
-    [string] $AlternativeNames  = "",
+    [string] $AlternativeNames,
     # Email for registration on letsencrypt ex. "you@example.com"
     [Parameter(Position=1,Mandatory=$true)]
-    [string] $Email             = "",
+    [string] $Email,
     # Parent Path to install nginx: "C:\tools" as default
     [string] $NginxRootPath     = "C:\tools",
     # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
@@ -38,6 +38,7 @@ $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.4.227
 function main {
     Write-Host "HostName: $env:COMPUTERNAME"
     Write-Host "CommonName: $CommonName"
+    Write-Debug "PSScriptRoot: $PSScriptRoot"
 
     # Check Installed .NET Framework Version.
     # https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#ps_a
