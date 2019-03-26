@@ -508,14 +508,15 @@ function MakeDhparam {
         return
     }
     
+    $dhparam = Join-Path $Path "dhparam.pem"
+    if (Test-Path $dhparam) {
+        Write-Host "There is already $dhparam"
+        return
+    }
+
     # Generate DH parameters for DHE ciphers.
     # https://qiita.com/d2cd-ytakada/items/7ac9ce32c1ed4d01d505
-    $dhparam = Join-Path $Path dhparam.pem
-    if ( ! (Test-Path $dhparam) ) {
-        openssl dhparam -out $dhparam 2048
-    } else {
-        Write-Host "There is already $dhparam"
-    }
+    openssl dhparam -out $dhparam 2048
 }
 
 main
