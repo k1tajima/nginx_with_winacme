@@ -38,7 +38,6 @@ $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.4.227
 function main {
     Write-Host "HostName: $env:COMPUTERNAME"
     Write-Host "CommonName: $CommonName"
-    Write-Debug "PSScriptRoot: $PSScriptRoot"
 
     # Check Installed .NET Framework Version.
     # https://docs.microsoft.com/en-us/dotnet/framework/migration-guide/how-to-determine-which-versions-are-installed#ps_a
@@ -95,6 +94,9 @@ function main {
         # Restart nginx using port 443 with SSL.
         nssm restart nginx
     }
+
+    # Finish
+    Write-Host "`r`nFinished."
 }
 
 function InstallAll {
@@ -281,7 +283,7 @@ function UpgradeNginxConf {
         return
     }
 
-    Write-Host "Upgrade nginx conf for ssl."
+    Write-Host "Upgrading nginx conf for ssl..."
 
     if ( ! $ServerNames ) {
         $ServerNames = $CommonName
@@ -305,6 +307,7 @@ function UpgradeNginxConf {
                     "    include nginx_ssl.conf; # managed" `
                     "    include conf.d/*.conf;  # managed" `
                     "}" | Add-Content -Path $ConfPath
+    Write-Host "    nginx.conf has upgraded, $ConfPath"
 
     # Replace cert store path in nginx_ssl.conf
     $NginxSslConf = Join-Path $ConfFolderPath "nginx_ssl.conf"
@@ -316,20 +319,22 @@ function UpgradeNginxConf {
         # ssl_dhparam C:/SSL/cert/dhparam.pem; # managed
         (Get-Content $NginxSslConf) -replace "([^ \t]+).*(dhparam.pem);[ \t]*# managed","`$1 $CertStorePathSlashed`$2; # managed" | Set-Content $NginxSslConf
     }
+    Write-Host "    nginx_ssl.conf has upgraded, $NginxSslConf"
 
     # Replace server name in default.conf
     $DefaultConf = Join-Path $ConfFolderPath "conf.d\default.conf"
     if ( Test-Path $DefaultConf ) {
         # server_name www.example.com; # managed(CommonName)
         $ServerNameDirective = "server_name ${CommonName}; # managed(CommonName)"
-        (Get-Content $DefaultConf) -replace "server_name.*# managed(CommonName)","$ServerNameDirective" | Set-Content $DefaultConf
-        # server_name www.example.com app.example.com www.example.jp; # managed
-        $ServerNameDirective = "server_name " + ($ServerNames -replace ","," ") + "; # managed"
-        (Get-Content $DefaultConf) -replace "server_name.*# managed[ \t]*$","$ServerNameDirective" | Set-Content $DefaultConf
+        (Get-Content $DefaultConf) -replace "server_name.*# managed\(CommonName\)","$ServerNameDirective" | Set-Content $DefaultConf
+        # server_name www.example.com app.example.com www.example.jp; # managed(ServerNames)
+        $ServerNameDirective = "server_name " + ($ServerNames -replace ","," ") + "; # managed(ServerNames)"
+        (Get-Content $DefaultConf) -replace "server_name.*# managed\(ServerNames\)","$ServerNameDirective" | Set-Content $DefaultConf
     }
+    Write-Host "    default.conf has upgraded, $DefaultConf"
 }
 
-# https://github.com/mkevenaar/chocolatey-packages/blob/master/automatic/nginx/tools/helpers.ps1
+# Reference https://github.com/mkevenaar/chocolatey-packages/blob/master/automatic/nginx/tools/helpers.ps1
 function Get-NginxPaths {
     [CmdletBinding()]
     param(
