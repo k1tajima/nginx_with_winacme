@@ -85,7 +85,12 @@ function main {
 
     # Upgrade nginx.conf for SSL.
     if ( $Cert ) {
-        UpgradeNginxConf -ConfPath $NginxPathSet.ConfPath -ServerName $CommonName -Source (Join-Path $PSScriptRoot conf)
+        $ServerNames = $CommonName
+        if ($AlternativeNames) {
+            $ServerNames += ",$AlternativeNames"
+        }
+
+        UpgradeNginxConf -ConfPath $NginxPathSet.ConfPath -CommonName $CommonName -ServerNames $ServerNames -Source (Join-Path $PSScriptRoot conf)
 
         # Restart nginx using port 443 with SSL.
         nssm restart nginx
@@ -267,7 +272,8 @@ function UpgradeNginxConf {
         [Parameter(Mandatory=$true)]
         [string] $ConfPath,
         [Parameter(Mandatory=$true)]
-        [string] $ServerName,
+        [string] $CommonName,
+        [string] $ServerNames,
         [string] $Source
     )
 
@@ -276,6 +282,10 @@ function UpgradeNginxConf {
     }
 
     Write-Host "Upgrade nginx conf for ssl."
+
+    if ( ! $ServerNames ) {
+        $ServerNames = $CommonName
+    }
     
     # Copy conf files from source in recurse
     $ConfFolderPath = Split-Path -Path $ConfPath -Parent
@@ -310,9 +320,12 @@ function UpgradeNginxConf {
     # Replace server name in default.conf
     $DefaultConf = Join-Path $ConfFolderPath "conf.d\default.conf"
     if ( Test-Path $DefaultConf ) {
-        $ServerNameDirective = "server_name " + ($ServerName -replace ","," ") + "; # managed"
-        # server_name www.example.com; # managed
-        (Get-Content $DefaultConf) -replace "server_name.*# managed","$ServerNameDirective" | Set-Content $DefaultConf
+        # server_name www.example.com; # managed(CommonName)
+        $ServerNameDirective = "server_name ${CommonName}; # managed(CommonName)"
+        (Get-Content $DefaultConf) -replace "server_name.*# managed(CommonName)","$ServerNameDirective" | Set-Content $DefaultConf
+        # server_name www.example.com app.example.com www.example.jp; # managed
+        $ServerNameDirective = "server_name " + ($ServerNames -replace ","," ") + "; # managed"
+        (Get-Content $DefaultConf) -replace "server_name.*# managed[ \t]*$","$ServerNameDirective" | Set-Content $DefaultConf
     }
 }
 
