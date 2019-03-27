@@ -13,19 +13,8 @@ Param (
     # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
     [string] $CertStorePath     = "C:\SSL\cert\win-acme",
     # Challenge Certificate: default is false. It's just for testing
-    [switch]$Cert,
-    # win-acme v1 Will be discontinued
-    [switch]$WinAcme1,
-    # win-acme v2 as default
-    [switch]$WinAcme2
+    [switch]$Cert
 )
-
-# Check Parameters
-if ( $WinAcme2 -eq $WinAcme1 ) {
-    # win-acme v2 as default
-    $WinAcme2 = $true
-    $WinAcme1 = $false
-}
 
 # Web Access with TLS1.2
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -79,8 +68,7 @@ function main {
         -AlternativeNames $AlternativeNames `
         -Email $Email `
         -WebRootPath $(Join-Path $NginxPathSet.NginxDir "html") `
-        -CertStorePath $(if ( $Cert ) { $CertStorePath } else { "" }) `
-        -WinAcme2:$WinAcme2
+        -CertStorePath $(if ( $Cert ) { $CertStorePath } else { "" })
 
     # Upgrade nginx.conf for SSL.
     if ( $Cert ) {
@@ -134,12 +122,6 @@ function InstallAll {
         choco install -y nginx --params $NginParams
     }
 
-    # letsencrypt-win-simple(win-acme v1)
-    # https://chocolatey.org/packages/letsencrypt-win-simple
-    if ($WinAcme1) {
-        choco install -y letsencrypt-win-simple
-    }
-
     # win-acme v2: Install from release package.
     # https://github.com/PKISharp/win-acme/releases
     $WinAcmeInstallPath = Join-Path $env:ProgramFiles "win-acme2"
@@ -169,8 +151,7 @@ function LetsencryptCertificate {
         [string] $Email,
         [Parameter(Mandatory=$true)]
         [string] $WebRootPath,
-        [string] $CertStorePath,
-        [switch] $WinAcme2
+        [string] $CertStorePath
     )
 
     if ( $AlternativeNames ) {
@@ -184,36 +165,23 @@ function LetsencryptCertificate {
         Write-Host "Challenge Lets Encrypt Certificate..."
 
         # Store script for win-acme.
-        if ( $WinAcme2 ) {
-            $CertStoreScript = "register_certpem.ps1"
-        } else {
-            $CertStoreScript = "register_certpem_v1.cmd"
-        }
+        $CertStoreScript = "register_certpem.ps1"
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $CertStoreScript) -Destination $CertStorePath
         $Script = Join-Path $CertStorePath $CertStoreScript
     
         # Declare script for installing certificate.
         # https://github.com/PKISharp/win-acme/wiki/Install-script
-        if ( $WinAcme2 ) {
-            $OptionParams = "--installation", "script",
-                            "--store", "pemfiles", `
-                            "--pemfilespath", $CertStorePath, `
-                            "--script", $Script, `
-                            "--scriptparameters", "'{0}' '${CertStorePath}'"
-        } else {
-            $OptionParams = "--script", $Script,
-                            "--scriptparameters", "\`"{0}\`" \`"${CertStorePath}\`" \`"{2}\`" \`"{StorePath}\`""
-        }
+        $OptionParams = "--installation", "script",
+                        "--store", "pemfiles", `
+                        "--pemfilespath", $CertStorePath, `
+                        "--script", $Script, `
+                        "--scriptparameters", "'{0}' '${CertStorePath}'"
     } else {
 
         Write-Host "Test Lets Encrypt Certificate..."
 
         # Declare baseuri for test.
-        if ( $WinAcme2 ) {
-            $OptionParams = "--baseuri", "https://acme-staging-v02.api.letsencrypt.org/"
-        } else {
-            $OptionParams = "--baseuri", "https://acme-staging.api.letsencrypt.org/"
-        }
+        $OptionParams = "--baseuri", "https://acme-staging-v02.api.letsencrypt.org/"
     }
 
     # Run win-acme(WACS)
@@ -225,48 +193,23 @@ function LetsencryptCertificate {
     Write-Host "  Email         = $Email"
     Write-Host "  CertStorePath = $CertStorePath"
 
-    if ( $WinAcme2 ) {
-        
-        # win-acme v2
-
-        Write-Host "wacs --target manual `
-            --validation filesystem `
-            --commonname ${CommonName} `
-            --host ${HostNames} `
-            --webroot $WebRootPath `
-            --emailaddress ${Email} `
-            --accepttos `
-            ${OptionParams}"
-        wacs --target manual `
-            --validation filesystem `
-            --commonname ${CommonName} `
-            --host ${HostNames} `
-            --webroot $WebRootPath `
-            --emailaddress ${Email} `
-            --accepttos `
-            ${OptionParams}
-    } else {
-
-        # letsencrypt-win-win-simple v1
-
-        Write-Host "letsencrypt --plugin manual `
+    # win-acme v2
+    Write-Host "wacs --target manual `
         --validation filesystem `
         --commonname ${CommonName} `
-        --manualhost ${HostNames} `
+        --host ${HostNames} `
         --webroot $WebRootPath `
         --emailaddress ${Email} `
         --accepttos `
         ${OptionParams}"
-    
-        letsencrypt --plugin manual `
-            --validation filesystem `
-            --commonname ${CommonName} `
-            --manualhost ${HostNames} `
-            --webroot $WebRootPath `
-            --emailaddress ${Email} `
-            --accepttos `
-            ${OptionParams}
-    }
+    wacs --target manual `
+        --validation filesystem `
+        --commonname ${CommonName} `
+        --host ${HostNames} `
+        --webroot $WebRootPath `
+        --emailaddress ${Email} `
+        --accepttos `
+        ${OptionParams}
 }
 
 function UpgradeNginxConf {
