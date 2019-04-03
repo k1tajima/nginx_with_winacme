@@ -21,7 +21,7 @@ Param (
 
 # Please check the latest version of win-acme yourself.
 # https://github.com/PKISharp/win-acme/releases/
-$WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.4.227/win-acme.v2.0.4.227.zip"
+$WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.5.246/win-acme.v2.0.5.246.zip"
 # $WinAcmeUrl = (((Invoke-WebRequest -Uri "https://github.com/PKISharp/win-acme/releases/").Links.Href) -match "win-acme.v[0-9\.]+.zip")[0]
 
 function main {
@@ -181,7 +181,8 @@ function LetsencryptCertificate {
         Write-Host "Test Lets Encrypt Certificate..."
 
         # Declare baseuri for test.
-        $OptionParams = "--baseuri", "https://acme-staging-v02.api.letsencrypt.org/"
+        $OptionParams = "--baseuri", "https://acme-staging-v02.api.letsencrypt.org/", `
+                        "--notaskscheduler"
     }
 
     # Run win-acme(WACS)
