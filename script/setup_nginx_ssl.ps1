@@ -24,6 +24,9 @@ Param (
 $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.5.246/win-acme.v2.0.5.246.zip"
 # $WinAcmeUrl = (((Invoke-WebRequest -Uri "https://github.com/PKISharp/win-acme/releases/").Links.Href) -match "win-acme.v[0-9\.]+.zip")[0]
 
+# Return value of functions.
+$ReturnValue = $null
+
 function main {
     Write-Host "HostName: $env:COMPUTERNAME"
     Write-Host "CommonName: $CommonName"
@@ -71,7 +74,7 @@ function main {
         -CertStorePath $(if ( $Cert ) { $CertStorePath } else { "" })
 
     # Upgrade nginx.conf for SSL.
-    if ( $Cert ) {
+    if ( $ReturnValue -and $Cert ) {
         $ServerNames = $CommonName
         if ($AlternativeNames) {
             $ServerNames += ",$AlternativeNames"
@@ -81,10 +84,23 @@ function main {
 
         # Restart nginx using port 443 with SSL.
         nssm restart nginx
-    }
 
-    # Finish
-    Write-Host "`r`nFinished."
+        Write-Host ""
+        Write-Host "Finished."
+
+    } elseif ( $ReturnValue ) {
+        Write-Host ""
+        Write-Host "Test was suceeded."
+        Write-Host "Please run this script with -Cert option."
+        Write-Host ""
+        Write-Host "  PS> $(Split-Path -Path $PSCommandPath -Leaf) -Cert"
+        Write-Host ""
+
+    } else {
+        Write-Host ""
+        Write-Host "Test was failed."
+        Write-Host "Please check 'CommonName', 'AlternativeNames, and DNS registrations."
+    }
 }
 
 function InstallAll {
@@ -211,6 +227,8 @@ function LetsencryptCertificate {
         --emailaddress ${Email} `
         --accepttos `
         ${OptionParams}
+
+    $script:ReturnValue = $?
 }
 
 function UpgradeNginxConf {
