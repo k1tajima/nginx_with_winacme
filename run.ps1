@@ -8,10 +8,10 @@ Param(
     -Email 'you@example.com' `
     -Cert:$Cert
 
-# Run setup_nginx_ssl.ps1 with alsl optins.
+# # Run setup_nginx_ssl.ps1 with alsl optins.
 # & (Join-Path $PSScriptRoot 'script\setup_nginx_ssl.ps1') `
 #     -CommonName 'www.example.com' `
-#     -AlternativeNames 'proxy.example.com,app.example.jp'
+#     -AlternativeNames 'proxy.example.com,app.example.jp' `
 #     -Email 'you@example.com' `
 #     -NginxRootPath 'C:\nginx' `
 #     -CertStorePath 'C:\SSL\cert\win-acme' `
