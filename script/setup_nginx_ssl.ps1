@@ -136,6 +136,9 @@ function InstallAll {
         Write-Host "Nginx Location = $NginxRootPath"
         Write-Host "Nginx Listen Port = $NginxPort"
         choco install -y nginx --params $NginParams
+
+        # Exclude choco upgrade nginx.
+        choco pin add -n=nginx
     }
 
     # win-acme v2: Install from release package.
