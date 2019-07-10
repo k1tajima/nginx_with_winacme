@@ -15,4 +15,5 @@ Param(
 #     -Email 'you@example.com' `
 #     -NginxRootPath 'C:\tools' `
 #     -CertStorePath 'C:\SSL\cert\win-acme' `
+#     -PfxPassword 'changeit' `
 #     -Cert:$Cert

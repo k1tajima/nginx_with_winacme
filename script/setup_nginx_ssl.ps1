@@ -12,6 +12,8 @@ Param (
     [string] $NginxRootPath     = "C:\tools",
     # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
     [string] $CertStorePath     = "C:\SSL\cert\win-acme",
+    # Password for Pfx file
+    [string] $PfxPassword       = "changeit",
     # Challenge Certificate: default is false. It's just for testing
     [switch]$Cert
 )
@@ -71,6 +73,7 @@ function main {
         -AlternativeNames $AlternativeNames `
         -Email $Email `
         -WebRootPath $(Join-Path $NginxPathSet.NginxDir "html") `
+        -PfxPassword $PfxPassword `
         -CertStorePath $(if ( $Cert ) { $CertStorePath } else { "" })
 
     # Upgrade nginx.conf for SSL.
@@ -170,6 +173,7 @@ function LetsencryptCertificate {
         [string] $Email,
         [Parameter(Mandatory=$true)]
         [string] $WebRootPath,
+        [string] $PfxPassword,
         [string] $CertStorePath
     )
 
@@ -191,8 +195,10 @@ function LetsencryptCertificate {
         # Declare script for installing certificate.
         # https://github.com/PKISharp/win-acme/wiki/Install-script
         $OptionParams = "--installation", "script",
-                        "--store", "pemfiles", `
+                        "--store", "centralssl,pemfiles", `
                         "--pemfilespath", $CertStorePath, `
+                        "--centralsslstore", $CertStorePath, `
+                        "--pfxpassword", $PfxPassword, `
                         "--script", $Script, `
                         "--scriptparameters", "'{0}' '${CertStorePath}'"
     } else {
