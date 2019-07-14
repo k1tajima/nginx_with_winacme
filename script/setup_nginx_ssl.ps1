@@ -8,12 +8,8 @@ Param (
     # Email for registration on letsencrypt ex. "you@example.com"
     [Parameter(Position=1,Mandatory=$true)]
     [string] $Email,
-    # Parent Path to install nginx: "C:\tools" as default
-    [string] $NginxRootPath     = "C:\tools",
     # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
     [string] $CertStorePath     = "C:\SSL\cert\win-acme",
-    # Password for Pfx file
-    [string] $PfxPassword       = "changeit",
     # Challenge Certificate: default is false. It's just for testing
     [switch]$Cert
 )
@@ -29,6 +25,11 @@ $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.8/win
 # Return value of functions.
 $ReturnValue = $null
 
+# Input Pfx Passowrd.
+if ($Cert) {
+    $PfxPassword = Read-Host "Enter PfxPassword" -AsSecureString
+}
+
 function main {
     Write-Host "HostName: $env:COMPUTERNAME"
     Write-Host "CommonName: $CommonName"
@@ -39,6 +40,7 @@ function main {
     $HasInstalledDotNet472 = ($DotNetKey -ge 461814)
 
     # Install packages first.
+    $NginxRootPath = "C:\tools"
     InstallAll -NginxRootPath $NginxRootPath
 
     if (! $HasInstalledDotNet472) {
@@ -173,7 +175,7 @@ function LetsencryptCertificate {
         [string] $Email,
         [Parameter(Mandatory=$true)]
         [string] $WebRootPath,
-        [string] $PfxPassword,
+        [SecureString] $PfxPassword,
         [string] $CertStorePath
     )
 
@@ -194,11 +196,12 @@ function LetsencryptCertificate {
     
         # Declare script for installing certificate.
         # https://github.com/PKISharp/win-acme/wiki/Install-script
+        $planePassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR( $PfxPassword ))
         $OptionParams = "--installation", "script",
                         "--store", "centralssl,pemfiles", `
                         "--pemfilespath", $CertStorePath, `
                         "--centralsslstore", $CertStorePath, `
-                        "--pfxpassword", $PfxPassword, `
+                        "--pfxpassword", $planePassword, `
                         "--script", $Script, `
                         "--scriptparameters", "'{0}' '${CertStorePath}'"
     } else {

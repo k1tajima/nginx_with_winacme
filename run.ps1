@@ -13,7 +13,5 @@ Param(
 #     -CommonName 'www.example.com' `
 #     -AlternativeNames 'proxy.example.com,app.example.jp' `
 #     -Email 'you@example.com' `
-#     -NginxRootPath 'C:\tools' `
 #     -CertStorePath 'C:\SSL\cert\win-acme' `
-#     -PfxPassword 'changeit' `
 #     -Cert:$Cert
