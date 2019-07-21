@@ -9,11 +9,11 @@ Param (
     [Parameter(Position=1,Mandatory=$true)]
     [string] $Email,
     # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
-    [string] $CertStorePath     = "C:\SSL\cert\win-acme",
+    [string] $CertStorePath = "C:\SSL\cert\win-acme",
     # Path to root of html files: "$env:PUBLIC\html" as default
     [string] $WebRootPath = "$env:PUBLIC\html",
     # Challenge Certificate: default is false. It's just for testing
-    [switch]$Cert
+    [switch] $Cert
 )
 
 # Web Access with TLS1.2
@@ -71,8 +71,10 @@ function main {
     # Make dhparam.pem by openssl.
     MakeDhparam -Path $CertStorePath
 
-    # Setup html root path in default.conf
-    SetupWebRootPath -WebRootPath $WebRootPath -NginxDir $NginxPathSet.NginxDir
+    # Setup html root path in nginx.conf
+    SetupWebRoot -WebRootPath $WebRootPath -NginxDir $NginxPathSet.NginxDir
+    # Reload nginx.conf
+    nssm restart nginx
 
     # Drive Windows ACME Simple(WACS) by webroot mode.
     LetsencryptCertificate `
@@ -102,7 +104,7 @@ function main {
 
     } elseif ( $ReturnValue ) {
         Write-Host ""
-        Write-Host "Test was suceeded."
+        Write-Host "Test has been success."
         Write-Host "Please run this script with -Cert option."
         Write-Host ""
         Write-Host "  PS> $(Split-Path -Path $PSCommandPath -Leaf) -Cert"
@@ -110,7 +112,7 @@ function main {
 
     } else {
         Write-Host ""
-        Write-Host "Test was failed."
+        Write-Host "Test has been fail."
         Write-Host "Please check 'CommonName', 'AlternativeNames, and DNS registrations."
     }
 }
@@ -171,7 +173,7 @@ function InstallAll {
     refreshenv
 }
 
-function SetupWebRootPath {
+function SetupWebRoot {
     param (
         [Parameter(Mandatory=$true)]
         [string] $WebRootPath,
@@ -189,18 +191,26 @@ function SetupWebRootPath {
         Write-Host "The html root folder has been created, $WebRootPath"
     }
 
-    # Update root directive in default.conf
-    $ConfFile = Join-Path $NginxDir "conf\conf.d\default.conf"
-    if ( ! (Test-Path $ConfFile )) {
-        return
+    # Update root directive in nginx.conf
+    $ConfFile = Join-Path $NginxDir "conf\nginx.conf"
+    $WebRootPathSlashed = $WebRootPath.Replace("\","/") -replace "/$",""
+    if (Test-Path $ConfFile ) {
+        # root C:/Users/Public/html;
+        $RootDirective = "root $WebRootPathSlashed;"
+        (Get-Content $ConfFile) -replace "^([^#]*)root.*;","`$1$RootDirective" | Set-Content $ConfFile
+
+        Write-Host "The root directive has been updated, $ConfFile"
     }
 
-    # root /C/Users/Public/html; # managed
-    $WebRootPathSlashed = ($WebRootPath -replace "^([a-zA-Z]):","/`$1" ).Replace("\","/") -replace "/$",""
-    $RootDirective = "root " + $WebRootPathSlashed + "; # managed"
-    (Get-Content $ConfFile) -replace "root.*# managed","$RootDirective" | Set-Content $ConfFile
+    # Update root directive in default.conf
+    $ConfFile = Join-Path $NginxDir "conf\conf.d\default.conf"
+    if (Test-Path $ConfFile ) {
+        # root C:/Users/Public/html; # managed
+        $RootDirective = "root $WebRootPathSlashed; # managed"
+        (Get-Content $ConfFile) -replace "root.*# managed",$RootDirective | Set-Content $ConfFile
 
-    Write-Host "The root directive has been updated, $ConfFile"
+        Write-Host "The root directive has been updated, $ConfFile"
+    }
 }
 
 function LetsencryptCertificate {
@@ -235,7 +245,7 @@ function LetsencryptCertificate {
         # https://github.com/PKISharp/win-acme/wiki/Install-script
         $planePassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR( $PfxPassword ))
         $OptionParams = "--installation", "script",
-                        "--store", "centralssl,pemfiles", `
+                        "--store", "pemfiles,centralssl", `
                         "--pemfilespath", $CertStorePath, `
                         "--centralsslstore", $CertStorePath, `
                         "--pfxpassword", $planePassword, `
@@ -323,12 +333,12 @@ function UpgradeNginxConf {
     # Replace cert store path in nginx_ssl.conf
     $NginxSslConf = Join-Path $ConfFolderPath "nginx_ssl.conf"
     if ( Test-Path $NginxSslConf ) {
-        # C:\SSL\cert -> C:/SSL/cert/
-        $CertStorePathSlashed = ($CertStorePath -replace "\\","/") -replace "[^/]$","`$0/"
+        # C:\SSL\cert\ -> C:/SSL/cert
+        $CertStorePathSlashed = $CertStorePath.Replace("\","/") -replace "/$",""
         # include C:/SSL/cert/nginx_ssl_cert.conf; # managed
-        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(nginx_ssl_cert.conf);[ \t]*# managed","`$1 $CertStorePathSlashed`$2; # managed" | Set-Content $NginxSslConf
+        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(nginx_ssl_cert.conf);[ \t]*# managed","`$1 $CertStorePathSlashed/`$2; # managed" | Set-Content $NginxSslConf
         # ssl_dhparam C:/SSL/cert/dhparam.pem; # managed
-        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(dhparam.pem);[ \t]*# managed","`$1 $CertStorePathSlashed`$2; # managed" | Set-Content $NginxSslConf
+        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(dhparam.pem);[ \t]*# managed","`$1 $CertStorePathSlashed/`$2; # managed" | Set-Content $NginxSslConf
 
         Write-Host "    nginx_ssl.conf has been upgraded, $NginxSslConf"
     }
