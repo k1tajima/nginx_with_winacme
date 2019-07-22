@@ -24,6 +24,9 @@ Param (
 $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.8/win-acme.v2.0.8.356.zip"
 # $WinAcmeUrl = (((Invoke-WebRequest -Uri "https://github.com/PKISharp/win-acme/releases/").Links.Href) -match "win-acme.v[0-9\.]+.zip")[0]
 
+# Install into C:\tools\nginx-<version> folder.
+$NginxRootPath = "C:\tools"
+
 # Return value of functions.
 $ReturnValue = $null
 
@@ -42,15 +45,15 @@ function main {
     $HasInstalledDotNet472 = ($DotNetKey -ge 461814)
 
     # Install packages first.
-    $NginxRootPath = "C:\tools"
     InstallAll -NginxRootPath $NginxRootPath
 
+    # Reboot Windows after installing .NET Framework.
     if (! $HasInstalledDotNet472) {
-        # Reboot Windows after installing .NET Framework.
         Write-Host "------------------------------------------"
         Write-Host ".NET Framework 4.7.2 has installed."
-        Write-Host "YOU HAVE TO REBOOT WINDOWS TO ACTIVATE IT."
+        Write-Host "YOU SHOULD TO REBOOT WINDOWS TO ACTIVATE IT."
         Write-Host "Then please run this script again."
+        Write-Host "If you don't want to reboot now, please select 'No'."
         Write-Host "------------------------------------------"
         Restart-Computer -Confirm
         exit
@@ -72,7 +75,7 @@ function main {
     MakeDhparam -Path $CertStorePath
 
     # Setup html root path in nginx.conf
-    SetupWebRoot -WebRootPath $WebRootPath -NginxDir $NginxPathSet.NginxDir
+    SetupWebRoot -WebRootPath $WebRootPath -NginxPath $NginxPathSet.NginxDir
     # Reload nginx.conf
     nssm restart nginx
 
@@ -137,8 +140,8 @@ function InstallAll {
     $ChocolateyInstall = Convert-Path "$((Get-Command choco).path)\..\.."
     Import-Module "${ChocolateyInstall}\helpers\chocolateyProfile.psm1"
 
-    # OpenSSL and misc.
-    choco install -y openssl.light 7zip dotnet4.7.2
+    # OpenSSL and .NET Framework.
+    choco install -y openssl.light dotnet4.7.2
 
     # Nginx
     # https://chocolatey.org/packages/nginx
@@ -178,7 +181,7 @@ function SetupWebRoot {
         [Parameter(Mandatory=$true)]
         [string] $WebRootPath,
         [Parameter(Mandatory=$true)]
-        [string] $NginxDir
+        [string] $NginxPath
     )
 
     # Make html root path if not exist.
@@ -186,13 +189,13 @@ function SetupWebRoot {
         # Create html folder.
         New-Item -Path $WebRootPath -ItemType Directory
         # copy some files.
-        Copy-Item -Path (Join-Path $NginxDir "html\*") -Destination $WebRootPath
+        Copy-Item -Path (Join-Path $NginxPath "html\*") -Destination $WebRootPath
 
         Write-Host "The html root folder has been created, $WebRootPath"
     }
 
     # Update root directive in nginx.conf
-    $ConfFile = Join-Path $NginxDir "conf\nginx.conf"
+    $ConfFile = Join-Path $NginxPath "conf\nginx.conf"
     $WebRootPathSlashed = $WebRootPath.Replace("\","/") -replace "/$",""
     if (Test-Path $ConfFile ) {
         # root C:/Users/Public/html;
@@ -203,7 +206,7 @@ function SetupWebRoot {
     }
 
     # Update root directive in default.conf
-    $ConfFile = Join-Path $NginxDir "conf\conf.d\default.conf"
+    $ConfFile = Join-Path $NginxPath "conf\conf.d\default.conf"
     if (Test-Path $ConfFile ) {
         # root C:/Users/Public/html; # managed
         $RootDirective = "root $WebRootPathSlashed; # managed"
@@ -398,8 +401,8 @@ function ExtractZipUrl {
     # Download zip from url
     (New-Object System.Net.WebClient).DownloadFile($Url, $TempZip)
     
-    # Extract by 7z.
-    7z x -o"$Destination" $TempZip
+    # Extract zip
+    Expand-Archive -LiteralPath $TempZip -DestinationPath $Destination
 }
 
 function AllowFirewallRule {
