@@ -97,6 +97,7 @@ function main {
 
         UpgradeNginxConf -ConfPath $NginxPathSet.ConfPath `
             -CommonName $CommonName -ServerNames $ServerNames `
+            -WebRootPath $WebRootPath `
             -Source (Join-Path $PSScriptRoot conf)
 
         # Restart nginx using port 443 with SSL.
@@ -204,16 +205,6 @@ function SetupWebRoot {
 
         Write-Host "The root directive has been updated, $ConfFile"
     }
-
-    # Update root directive in default.conf
-    $ConfFile = Join-Path $NginxPath "conf\conf.d\default.conf"
-    if (Test-Path $ConfFile ) {
-        # root C:/Users/Public/html; # managed
-        $RootDirective = "root $WebRootPathSlashed; # managed"
-        (Get-Content $ConfFile) -replace "root.*# managed",$RootDirective | Set-Content $ConfFile
-
-        Write-Host "The root directive has been updated, $ConfFile"
-    }
 }
 
 function LetsencryptCertificate {
@@ -300,6 +291,7 @@ function UpgradeNginxConf {
         [Parameter(Mandatory=$true)]
         [string] $CommonName,
         [string] $ServerNames,
+        [string] $WebRootPath,
         [string] $Source
     )
 
@@ -346,7 +338,7 @@ function UpgradeNginxConf {
         Write-Host "    nginx_ssl.conf has been upgraded, $NginxSslConf"
     }
 
-    # Replace server name default.conf
+    # Replace server name in default.conf
     $DefaultConf = Join-Path $ConfFolderPath "conf.d\default.conf"
     if ( Test-Path $DefaultConf ) {
         # server_name www.example.com; # managed(CommonName)
@@ -357,6 +349,14 @@ function UpgradeNginxConf {
         (Get-Content $DefaultConf) -replace "server_name.*# managed\(ServerNames\)","$ServerNameDirective" | Set-Content $DefaultConf
 
         Write-Host "    default.conf has been upgraded, $DefaultConf"
+    }
+
+    # Replace root path in default.conf
+    if ( (Test-Path $DefaultConf) -and ($WebRootPath) -and (Test-Path $WebRootPath) ) {
+        # root C:/Users/Public/html; # managed
+        $WebRootPathSlashed = $WebRootPath.Replace("\","/") -replace "/$",""
+        $RootDirective = "root $WebRootPathSlashed; # managed"
+        (Get-Content $DefaultConf) -replace "root.*# managed",$RootDirective | Set-Content $DefaultConf
     }
 }
 
