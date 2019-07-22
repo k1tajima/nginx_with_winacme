@@ -32,7 +32,7 @@ $ReturnValue = $null
 
 # Input Pfx Passowrd.
 if ($Cert) {
-    $PfxPassword = Read-Host "Enter PfxPassword" -AsSecureString
+    $PfxPassword = Read-Host "Enter PFX Password" -AsSecureString
 }
 
 function main {
