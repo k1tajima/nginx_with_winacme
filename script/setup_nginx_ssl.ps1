@@ -9,9 +9,11 @@ Param (
     [Parameter(Position=1,Mandatory=$true)]
     [string] $Email,
     # Path to store Certificate Pem Files: "C:\SSL\cert\win-acme" as default
-    [string] $CertStorePath     = "C:\SSL\cert\win-acme",
+    [string] $CertStorePath = "C:\SSL\cert\win-acme",
+    # Path to root of html files: "$env:PUBLIC\html" as default
+    [string] $WebRootPath = "$env:PUBLIC\html",
     # Challenge Certificate: default is false. It's just for testing
-    [switch]$Cert
+    [switch] $Cert
 )
 
 # Web Access with TLS1.2
@@ -21,6 +23,9 @@ Param (
 # https://github.com/PKISharp/win-acme/releases/
 $WinAcmeUrl = "https://github.com/PKISharp/win-acme/releases/download/v2.0.8/win-acme.v2.0.8.356.zip"
 # $WinAcmeUrl = (((Invoke-WebRequest -Uri "https://github.com/PKISharp/win-acme/releases/").Links.Href) -match "win-acme.v[0-9\.]+.zip")[0]
+
+# Install into C:\tools\nginx-<version> folder.
+$NginxRootPath = "C:\tools"
 
 # Return value of functions.
 $ReturnValue = $null
@@ -40,15 +45,15 @@ function main {
     $HasInstalledDotNet472 = ($DotNetKey -ge 461814)
 
     # Install packages first.
-    $NginxRootPath = "C:\tools"
     InstallAll -NginxRootPath $NginxRootPath
 
+    # Reboot Windows after installing .NET Framework.
     if (! $HasInstalledDotNet472) {
-        # Reboot Windows after installing .NET Framework.
         Write-Host "------------------------------------------"
         Write-Host ".NET Framework 4.7.2 has installed."
-        Write-Host "YOU HAVE TO REBOOT WINDOWS TO ACTIVATE IT."
+        Write-Host "YOU SHOULD TO REBOOT WINDOWS TO ACTIVATE IT."
         Write-Host "Then please run this script again."
+        Write-Host "If you don't want to reboot now, please select 'No'."
         Write-Host "------------------------------------------"
         Restart-Computer -Confirm
         exit
@@ -69,12 +74,17 @@ function main {
     # Make dhparam.pem by openssl.
     MakeDhparam -Path $CertStorePath
 
+    # Setup html root path in nginx.conf
+    SetupWebRoot -WebRootPath $WebRootPath -NginxPath $NginxPathSet.NginxDir
+    # Reload nginx.conf
+    nssm restart nginx
+
     # Drive Windows ACME Simple(WACS) by webroot mode.
     LetsencryptCertificate `
         -CommonName $CommonName `
         -AlternativeNames $AlternativeNames `
         -Email $Email `
-        -WebRootPath $(Join-Path $NginxPathSet.NginxDir "html") `
+        -WebRootPath $WebRootPath `
         -PfxPassword $PfxPassword `
         -CertStorePath $(if ( $Cert ) { $CertStorePath } else { "" })
 
@@ -85,7 +95,9 @@ function main {
             $ServerNames += ",$AlternativeNames"
         }
 
-        UpgradeNginxConf -ConfPath $NginxPathSet.ConfPath -CommonName $CommonName -ServerNames $ServerNames -Source (Join-Path $PSScriptRoot conf)
+        UpgradeNginxConf -ConfPath $NginxPathSet.ConfPath `
+            -CommonName $CommonName -ServerNames $ServerNames `
+            -Source (Join-Path $PSScriptRoot conf)
 
         # Restart nginx using port 443 with SSL.
         nssm restart nginx
@@ -95,7 +107,7 @@ function main {
 
     } elseif ( $ReturnValue ) {
         Write-Host ""
-        Write-Host "Test was suceeded."
+        Write-Host "Test has been success."
         Write-Host "Please run this script with -Cert option."
         Write-Host ""
         Write-Host "  PS> $(Split-Path -Path $PSCommandPath -Leaf) -Cert"
@@ -103,7 +115,7 @@ function main {
 
     } else {
         Write-Host ""
-        Write-Host "Test was failed."
+        Write-Host "Test has been fail."
         Write-Host "Please check 'CommonName', 'AlternativeNames, and DNS registrations."
     }
 }
@@ -128,23 +140,21 @@ function InstallAll {
     $ChocolateyInstall = Convert-Path "$((Get-Command choco).path)\..\.."
     Import-Module "${ChocolateyInstall}\helpers\chocolateyProfile.psm1"
 
-    # OpenSSL and misc.
-    choco install -y openssl.light 7zip dotnet4.7.2
+    # OpenSSL and .NET Framework.
+    choco install -y openssl.light dotnet4.7.2
 
     # Nginx
     # https://chocolatey.org/packages/nginx
     if (! $NginxPort ) {
         $NginxPort = "80"
     }
-    if ( $NginxRootPath ) {
-        $NginParams = "`"/installLocation:$NginxRootPath /Port:$NginxPort`""
-        Write-Host "Nginx Location = $NginxRootPath"
-        Write-Host "Nginx Listen Port = $NginxPort"
-        choco install -y nginx --params $NginParams
+    $NginParams = "`"/installLocation:$NginxRootPath /Port:$NginxPort`""
+    Write-Host "Nginx Location = $NginxRootPath"
+    Write-Host "Nginx Listen Port = $NginxPort"
+    choco install -y nginx --params $NginParams
 
-        # Exclude choco upgrade nginx.
-        choco pin add -n=nginx
-    }
+    # Exclude choco upgrade nginx.
+    choco pin add -n=nginx
 
     # win-acme v2: Install from release package.
     # https://github.com/PKISharp/win-acme/releases
@@ -164,6 +174,46 @@ function InstallAll {
 
     # Apply environment for packages installed by chocolatey.
     refreshenv
+}
+
+function SetupWebRoot {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string] $WebRootPath,
+        [Parameter(Mandatory=$true)]
+        [string] $NginxPath
+    )
+
+    # Make html root path if not exist.
+    if ( ! (Test-Path $WebRootPath)) {
+        # Create html folder.
+        New-Item -Path $WebRootPath -ItemType Directory
+        # copy some files.
+        Copy-Item -Path (Join-Path $NginxPath "html\*") -Destination $WebRootPath
+
+        Write-Host "The html root folder has been created, $WebRootPath"
+    }
+
+    # Update root directive in nginx.conf
+    $ConfFile = Join-Path $NginxPath "conf\nginx.conf"
+    $WebRootPathSlashed = $WebRootPath.Replace("\","/") -replace "/$",""
+    if (Test-Path $ConfFile ) {
+        # root C:/Users/Public/html;
+        $RootDirective = "root $WebRootPathSlashed;"
+        (Get-Content $ConfFile) -replace "^([^#]*)root.*;","`$1$RootDirective" | Set-Content $ConfFile
+
+        Write-Host "The root directive has been updated, $ConfFile"
+    }
+
+    # Update root directive in default.conf
+    $ConfFile = Join-Path $NginxPath "conf\conf.d\default.conf"
+    if (Test-Path $ConfFile ) {
+        # root C:/Users/Public/html; # managed
+        $RootDirective = "root $WebRootPathSlashed; # managed"
+        (Get-Content $ConfFile) -replace "root.*# managed",$RootDirective | Set-Content $ConfFile
+
+        Write-Host "The root directive has been updated, $ConfFile"
+    }
 }
 
 function LetsencryptCertificate {
@@ -198,7 +248,7 @@ function LetsencryptCertificate {
         # https://github.com/PKISharp/win-acme/wiki/Install-script
         $planePassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR( $PfxPassword ))
         $OptionParams = "--installation", "script",
-                        "--store", "centralssl,pemfiles", `
+                        "--store", "pemfiles,centralssl", `
                         "--pemfilespath", $CertStorePath, `
                         "--centralsslstore", $CertStorePath, `
                         "--pfxpassword", $planePassword, `
@@ -281,21 +331,22 @@ function UpgradeNginxConf {
                     "    include nginx_ssl.conf; # managed" `
                     "    include conf.d/*.conf;  # managed" `
                     "}" | Add-Content -Path $ConfPath
-    Write-Host "    nginx.conf has upgraded, $ConfPath"
+    Write-Host "    nginx.conf has been upgraded, $ConfPath"
 
     # Replace cert store path in nginx_ssl.conf
     $NginxSslConf = Join-Path $ConfFolderPath "nginx_ssl.conf"
     if ( Test-Path $NginxSslConf ) {
-        # C:\SSL\cert -> C:/SSL/cert/
-        $CertStorePathSlashed = ($CertStorePath -replace "\\","/") -replace "[^/]$","`$0/"
+        # C:\SSL\cert\ -> C:/SSL/cert
+        $CertStorePathSlashed = $CertStorePath.Replace("\","/") -replace "/$",""
         # include C:/SSL/cert/nginx_ssl_cert.conf; # managed
-        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(nginx_ssl_cert.conf);[ \t]*# managed","`$1 $CertStorePathSlashed`$2; # managed" | Set-Content $NginxSslConf
+        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(nginx_ssl_cert.conf);[ \t]*# managed","`$1 $CertStorePathSlashed/`$2; # managed" | Set-Content $NginxSslConf
         # ssl_dhparam C:/SSL/cert/dhparam.pem; # managed
-        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(dhparam.pem);[ \t]*# managed","`$1 $CertStorePathSlashed`$2; # managed" | Set-Content $NginxSslConf
-    }
-    Write-Host "    nginx_ssl.conf has upgraded, $NginxSslConf"
+        (Get-Content $NginxSslConf) -replace "([^ \t]+).*(dhparam.pem);[ \t]*# managed","`$1 $CertStorePathSlashed/`$2; # managed" | Set-Content $NginxSslConf
 
-    # Replace server name in default.conf
+        Write-Host "    nginx_ssl.conf has been upgraded, $NginxSslConf"
+    }
+
+    # Replace server name default.conf
     $DefaultConf = Join-Path $ConfFolderPath "conf.d\default.conf"
     if ( Test-Path $DefaultConf ) {
         # server_name www.example.com; # managed(CommonName)
@@ -304,8 +355,9 @@ function UpgradeNginxConf {
         # server_name www.example.com app.example.com www.example.jp; # managed(ServerNames)
         $ServerNameDirective = "server_name " + ($ServerNames -replace ","," ") + "; # managed(ServerNames)"
         (Get-Content $DefaultConf) -replace "server_name.*# managed\(ServerNames\)","$ServerNameDirective" | Set-Content $DefaultConf
+
+        Write-Host "    default.conf has been upgraded, $DefaultConf"
     }
-    Write-Host "    default.conf has upgraded, $DefaultConf"
 }
 
 # Reference https://github.com/mkevenaar/chocolatey-packages/blob/master/automatic/nginx/tools/helpers.ps1
@@ -349,8 +401,8 @@ function ExtractZipUrl {
     # Download zip from url
     (New-Object System.Net.WebClient).DownloadFile($Url, $TempZip)
     
-    # Extract by 7z.
-    7z x -o"$Destination" $TempZip
+    # Extract zip
+    Expand-Archive -LiteralPath $TempZip -DestinationPath $Destination
 }
 
 function AllowFirewallRule {
