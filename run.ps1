@@ -14,4 +14,5 @@ Param(
 #     -AlternativeNames 'proxy.example.com,app.example.jp' `
 #     -Email 'you@example.com' `
 #     -CertStorePath 'C:\SSL\cert\win-acme' `
+#     -WebRootPath "$env:PUBLIC\html" `
 #     -Cert:$Cert

@@ -82,8 +82,8 @@ Windows ACME Simple は、以前まで [letsencript-win-simple][lews] という�
     #     -CommonName 'www.example.com' `
     #     -AlternativeNames 'proxy.example.com,app.example.jp' `
     #     -Email 'you@example.com' `
-    #     -NginxRootPath 'C:\tools' `
     #     -CertStorePath 'C:\SSL\cert\win-acme' `
+    #     -WebRootPath "$env:PUBLIC\html" `
     #     -Cert:$Cert
     ```
 
@@ -265,8 +265,8 @@ Windows ACME Simple は、以前まで [letsencript-win-simple][lews] という�
 
 * 暗号化方式(Chiper Suite)について
 
-    SSL通信で許可する暗号化方式は、https://nginxconfig.io の Modern Browser 向け設定に従っている。よって、古いブラウザは切り捨てられアクセス拒否される。GitHub や巷のサイトと比較しても強めの暗号化のみ対応となっているため、必要に応じて `conf/nginx_ssl.conf` の設定を見直しのこと。（[該当箇所][chipersuite]）
+    SSL通信で許可する暗号化方式は、https://nginxconfig.io の Mozilla Intermediate 向け設定に従っている。よって、古いブラウザは切り捨てられアクセス拒否される。GitHub や巷のサイトと比較しても強めの暗号化のみ対応となっているため、必要に応じて `conf/nginx_ssl.conf` の設定を見直しのこと。（[該当箇所][chipersuite]）
 
-[chipersuite]: https://github.com/tajimak/nginx_with_winacme/blob/65587e5dda94aa3854ccee28ff3745c605423214/script/conf/nginx_ssl.conf#L16
+[chipersuite]: https://github.com/tajimak/nginx_with_winacme/blob/master/script/conf/nginx_ssl.conf#L17
 
 以上
